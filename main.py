@@ -81,8 +81,8 @@ async def extract_address(
         response.raise_for_status()
         result = response.json()
         extracted = result.get("response", "").strip()
-	logger.info(f"Request received — text length: {len(request.ocr_text)} chars")
-	logger.info(f"AI response: {extracted}")
+        logger.info(f"Request received — text length: {len(request.ocr_text)} chars")
+        logger.info(f"AI response: {extracted}")
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Model inference timed out")
     except httpx.HTTPError as e:
