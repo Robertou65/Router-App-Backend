@@ -1,11 +1,15 @@
 import os
 
 import httpx
+import logging
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 API_SECRET_KEY = os.getenv("API_SECRET_KEY")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -77,6 +81,8 @@ async def extract_address(
         response.raise_for_status()
         result = response.json()
         extracted = result.get("response", "").strip()
+	logger.info(f"Request received — text length: {len(request.ocr_text)} chars")
+	logger.info(f"AI response: {extracted}")
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Model inference timed out")
     except httpx.HTTPError as e:
