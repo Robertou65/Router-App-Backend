@@ -1,0 +1,14 @@
+[Unit]
+Description=Router App Address Extractor
+After=network.target
+
+[Service]
+Type=simple
+User=appuser
+WorkingDirectory=/home/appuser/router-app-backend
+ExecStart=/home/appuser/router-app-backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
