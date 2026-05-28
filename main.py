@@ -15,13 +15,14 @@ API_SECRET_KEY = os.getenv("API_SECRET_KEY")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:1b")
 
-SYSTEM_PROMPT = """You are an address extraction tool for Colombian package delivery labels.
+SYSTEM_PROMPT_TEMPLATE = """You are an address extraction tool for Colombian package delivery labels.
 The input is raw OCR text scanned from a physical package label.
 It contains noise: barcodes, weights, tracking numbers, sender info, reference notes.
 
 Your task: extract ONLY the recipient delivery address.
 
 Rules:
+0. The delivery addresses in this route are located in {city}, Colombia. Use this as context when identifying the recipient address.
 1. The delivery address always follows the keyword "Destino:" if present in the text.
 2. Stop extracting when you encounter any of these keywords: Referencia:, Origen:, EAD:, FACTURA, PESO:, PO:, TN:, ST:, Intento
 3. Remove from the address: postal codes (C.P. XXXXX or CP XXXXX), phone numbers (Tel: or Telefono:), the word Colombia (it will be added later)
@@ -29,17 +30,18 @@ Rules:
 5. If no address can be found or identified, output exactly the word: ADDRESS_NOT_FOUND
 
 Valid Colombian address format examples:
-- Carrera 18b # 32 - 06 Sur, Quiroga Central, Bogotá
-- Calle 10 # 43E - 31, El Poblado, Medellín
-- Av Carrera 30 # 45 - 10, Teusaquillo, Bogotá
-- KR 18b # 32 - 06 SUR, Rafael Uribe Uribe, Bogotá DC
-- Transversal 8 # 15 - 30, Chapinero, Bogotá"""
+- Carrera 18b # 32 - 06 Sur, Quiroga Central, {city}
+- Calle 10 # 43E - 31, El Poblado, {city}
+- Av Carrera 30 # 45 - 10, Teusaquillo, {city}
+- KR 18b # 32 - 06 SUR, Rafael Uribe Uribe, {city}
+- Transversal 8 # 15 - 30, Chapinero, {city}"""
 
 app = FastAPI(title="Router App - Address Extractor")
 
 
 class ExtractRequest(BaseModel):
     ocr_text: str
+    city: str
 
 
 class ExtractResponse(BaseModel):
@@ -63,13 +65,16 @@ async def extract_address(
     if not request.ocr_text or not request.ocr_text.strip():
         raise HTTPException(status_code=400, detail="ocr_text is empty")
 
+    city = request.city.strip() or "Colombia"
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(city=city)
+
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
                 f"{OLLAMA_BASE_URL}/api/generate",
                 json={
                     "model": OLLAMA_MODEL,
-                    "system": SYSTEM_PROMPT,
+                    "system": system_prompt,
                     "prompt": request.ocr_text.strip(),
                     "stream": False,
                     "options": {
@@ -82,6 +87,7 @@ async def extract_address(
         result = response.json()
         extracted = result.get("response", "").strip()
         logger.info(f"Request received — text length: {len(request.ocr_text)} chars")
+        logger.info(f"Route city used: {city}")
         logger.info(f"AI response: {extracted}")
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Model inference timed out")
